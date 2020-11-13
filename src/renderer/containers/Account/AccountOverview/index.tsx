@@ -23,27 +23,44 @@ const AccountOverview: FC = () => {
   useEffect(() => {
     if (!activePrimaryValidator) return;
 
+    const cancelToken = axios.CancelToken.source();
+
     const fetchData = async (): Promise<void> => {
       const {ip_address: ipAddress, port, protocol} = activePrimaryValidator;
       const address = formatAddress(ipAddress, port, protocol);
 
       setLoading(true);
-      const {data} = await axios.get(`${address}/accounts/${accountNumber}/balance`);
 
-      if (managedAccount) {
-        dispatch(
-          setManagedAccountBalance({
-            account_number: managedAccount.account_number,
-            balance: data.balance || 0,
-          }),
-        );
+      try {
+        const {data} = await axios.get(`${address}/accounts/${accountNumber}/balance`, {
+          cancelToken: cancelToken.token,
+        });
+
+        if (managedAccount) {
+          dispatch(
+            setManagedAccountBalance({
+              account_number: managedAccount.account_number,
+              balance: data.balance || 0,
+            }),
+          );
+        }
+
+        setBalance(data.balance);
+        setLoading(false);
+      } catch (error) {
+        // we safely cancel the request
+        if (axios.isCancel(error)) {
+          return;
+        }
+        setLoading(true);
       }
-
-      setBalance(data.balance);
-      setLoading(false);
     };
 
     fetchData();
+    return () => {
+      // To prevent state update
+      cancelToken.cancel('');
+    };
   }, [accountNumber, activePrimaryValidator, dispatch, managedAccount]);
 
   return (
